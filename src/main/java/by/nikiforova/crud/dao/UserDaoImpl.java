@@ -1,9 +1,13 @@
 package by.nikiforova.crud.dao;
 
 
-
 import by.nikiforova.crud.entity.User;
+import by.nikiforova.crud.exception.DataAccessException;
+import by.nikiforova.crud.exception.DatabaseException;
+import by.nikiforova.crud.exception.UserNotFoundException;
+import by.nikiforova.crud.exception.UserPersistenceException;
 import by.nikiforova.crud.util.HibernateUtil;
+import org.hibernate.HibernateException;
 import org.hibernate.Session;
 import org.hibernate.Transaction;
 import org.apache.logging.log4j.LogManager;
@@ -25,15 +29,22 @@ public class UserDaoImpl implements UserDao {
             transaction = session.beginTransaction();
             session.persist(user);
             transaction.commit();
-            logger.debug("Transaction on saving user with id = {} successfully completed.", user);
-        } catch (Exception e) {
+            logger.info("Transaction on saving user with id = {} successfully completed.", user);
+        } catch (HibernateException e) {
             if (transaction != null && transaction.isActive()) {
                 transaction.rollback();
             }
             logger.error("Error saving user: {}", user, e);
-            throw new RuntimeException("Error saving user", e);
+            throw new UserPersistenceException("Error saving user", e);
+        } catch (Exception e) {
+            if (transaction != null && transaction.isActive()) {
+                transaction.rollback();
+            }
+            logger.error("Unexpected error while saving user: {}", user, e);
+            throw new DataAccessException("Unexpected error while saving user", e);
         }
     }
+
     @Override
     public Optional<User> findById(Integer id) {
 
@@ -42,17 +53,32 @@ public class UserDaoImpl implements UserDao {
             throw new IllegalArgumentException("Id cannot be null");
         }
 
-        Transaction transaction;
+        Transaction transaction = null;
 
         try (Session session = HibernateUtil.getSessionFactory().getCurrentSession()) {
             transaction = session.beginTransaction();
             User user = session.find(User.class, id);
-            transaction.commit();
             if (user == null) {
                 transaction.rollback();
-                logger.warn("User not found with id: {}", id);
+                logger.info("User not found with id: {}", id);
+                throw new UserNotFoundException("User not found with id: " + id);
             }
-            return Optional.ofNullable(user);
+            transaction.commit();
+            return Optional.of(user);
+
+        } catch (HibernateException e) {
+            if (transaction != null && transaction.isActive()) {
+                transaction.rollback();
+            }
+            logger.error("Error while finding user by id: {}", id, e);
+            throw new DatabaseException("Error while finding user by id", e);
+
+        } catch (Exception e) {
+            if (transaction != null && transaction.isActive()) {
+                transaction.rollback();
+            }
+            logger.error("Unexpected error while finding user by id: {}", id, e);
+            throw new DataAccessException("Unexpected error while finding user", e);
         }
     }
 
@@ -63,14 +89,22 @@ public class UserDaoImpl implements UserDao {
             transaction = session.beginTransaction();
             List<User> users = session.createQuery("from User", User.class).list();
             transaction.commit();
-            logger.debug("Found {} users", users.size());
+            logger.info("Found {} users", users.size());
             return users;
-        } catch (Exception e) {
-            if (transaction != null) {
+
+        } catch (HibernateException e) {
+            if (transaction != null && transaction.isActive()) {
                 transaction.rollback();
             }
             logger.error("Error while finding all users", e);
-            throw new RuntimeException(e);
+            throw new DatabaseException("Error while finding all users", e);
+
+        } catch (Exception e) {
+            if (transaction != null && transaction.isActive()) {
+                transaction.rollback();
+            }
+            logger.error("Unexpected error while finding all users", e);
+            throw new DataAccessException("Unexpected error while finding all users", e);
         }
     }
 
@@ -82,12 +116,20 @@ public class UserDaoImpl implements UserDao {
             session.merge(user);
             transaction.commit();
             logger.info("User updated successfully: {}", user);
-        } catch (Exception e) {
-            if (transaction != null) {
+
+        } catch (HibernateException e) {
+            if (transaction != null && transaction.isActive()) {
                 transaction.rollback();
             }
             logger.error("Error updating user: {}", user, e);
-            throw new RuntimeException(e);
+            throw new UserPersistenceException("Error updating user", e);
+
+        } catch (Exception e) {
+            if (transaction != null && transaction.isActive()) {
+                transaction.rollback();
+            }
+            logger.error("Unexpected error while updating user: {}", user, e);
+            throw new DataAccessException("Unexpected error while updating user", e);
         }
     }
 
@@ -99,12 +141,19 @@ public class UserDaoImpl implements UserDao {
             session.remove(user);
             transaction.commit();
             logger.error("User deleted successfully: {}", user);
-        } catch (Exception e) {
-            if (transaction != null) {
+        } catch (HibernateException e) {
+            if (transaction != null && transaction.isActive()) {
                 transaction.rollback();
             }
             logger.error("Error deleting user: {}", user, e);
-            throw new RuntimeException(e);
+            throw new UserPersistenceException("Error deleting user", e);
+
+        } catch (Exception e) {
+            if (transaction != null && transaction.isActive()) {
+                transaction.rollback();
+            }
+            logger.error("Unexpected error while deleting user: {}", user, e);
+            throw new DataAccessException("Unexpected error while deleting user", e);
         }
     }
 }
