@@ -66,23 +66,7 @@ public class UserController {
 
             int age = getIntInput("Возраст: ");
 
-            Set<ConstraintViolation<User>> violations = validator.validate(new User(name, email, age));
-
-            if (!violations.isEmpty()) {
-                for (ConstraintViolation<User> violation : violations) {
-                    String propertyPath = violation.getPropertyPath().toString();
-                    String message = violation.getMessage();
-
-                    if (propertyPath.equals("email")) {
-                        System.out.println("Некорректный email: " + message);
-                    } else if (propertyPath.equals("age")) {
-                        System.out.println("Некорректный возраст: " + message);
-                    } else if (propertyPath.equals("name")) {
-                        System.out.println("Некорректное имя: " + message);
-                    }
-                }
-                return;
-            }
+            if (!validateUser(name, email, age)) return;
 
             userService.createUser(name, email, age);
             System.out.println("Пользователь успешно создан!");
@@ -145,30 +129,23 @@ public class UserController {
 
                 System.out.print("Новое имя: ");
                 String newName = scanner.nextLine().trim();
-                if (!newName.isEmpty()) {
-                    user.setName(newName);
-                }
 
                 System.out.print("Новый email: ");
                 String newEmail = scanner.nextLine().trim();
-                if (!newEmail.isEmpty()) {
-                    user.setEmail(newEmail);
-                }
 
                 System.out.print("Новый возраст: ");
                 String ageInput = scanner.nextLine().trim();
+                int newAge = 0;
                 if (!ageInput.isEmpty()) {
                     try {
-                        int newAge = Integer.parseInt(ageInput);
-                        if (newAge >= 0 && newAge <= 120) {
-                            user.setAge(newAge);
-                        } else {
-                            System.out.println("Некорректный возраст, оставлен прежний");
-                        }
+                        newAge = Integer.parseInt(ageInput);
                     } catch (NumberFormatException e) {
                         System.out.println("Некорректный формат возраста, оставлен прежний");
                     }
                 }
+
+                if (!validateUser(newName, newEmail, newAge)) return;
+
                 userService.updateUser(user);
                 System.out.println("Пользователь обновлен!");
             } else {
@@ -213,6 +190,26 @@ public class UserController {
                 System.out.println("Введите корректное число:");
             }
         }
+    }
+
+
+    private boolean validateUser(String newName, String newEmail, int newAge) {
+        Set<ConstraintViolation<User>> violations = validator.validate(new User(newName, newEmail, newAge));
+
+        if (!violations.isEmpty()) {
+            for (ConstraintViolation<User> violation : violations) {
+                String propertyPath = violation.getPropertyPath().toString();
+                String message = violation.getMessage();
+
+                switch (propertyPath) {
+                    case "email" -> System.out.println("Некорректный email: " + message);
+                    case "age" -> System.out.println("Некорректный возраст: " + message);
+                    case "name" -> System.out.println("Некорректное имя: " + message);
+                }
+            }
+            return false;
+        }
+        return true;
     }
 
     public void close() {
